@@ -1,48 +1,47 @@
 #include "clara.hpp"
 #include <fstream>
 #include <iostream>
-#include <system.io/Directory.h>
-#include <system.io/FileInfo.h>
-#include <system.io/Path.h>
-#include <system.net/HttpListener.h>
-#include <system.net/HttpListenerException.h>
-#include <system.net/HttpListenerResponse.h>
+#include <system.io/system.io.Path.h>
+#include <system.io/system.io.directory.h>
+#include <system.io/system.io.fileinfo.h>
+#include <system.net/system.net.http.httplistener.h>
+#include <system.net/system.net.http.httplistenerexception.h>
+#include <system.net/system.net.http.httplistenerresponse.h>
 #include <thread>
 
-void defaultResponse(System::Net::Http::HttpListenerResponse *response, std::string const &text);
+void DefaultResponse(System::Net::Http::HttpListenerResponse *response, std::string const &text);
+std::string LocalHost(unsigned int port);
 
 int main(int argc, char *argv[])
 {
     unsigned int port = 8888;
-    std::string path = System::IO::Directory::GetCurrentWorkingDirectory();
     bool showHelp = false;
 
     auto cli = clara::Opt(port, "port")
                    ["-p"]["--port"]("on what should I be listing? Default is 8888") |
-               clara::Arg(path, "path")("which path to serve static files from? Default is current working directory") |
                clara::Help(showHelp);
 
     auto result = cli.parse(clara::Args(argc, argv));
     if (!result)
     {
         std::cerr << "Error in command line: " << result.errorMessage() << std::endl;
-        exit(1);
+
+        cli.writeToStream(std::cout);
+
+        return 1;
     }
 
     if (showHelp)
     {
         cli.writeToStream(std::cout);
-        exit(0);
-    }
 
-    path = System::IO::Directory::GetCurrentWorkingDirectory();
-    std::cout << System::IO::Directory::GetCurrentWorkingDirectory() << std::endl;
+        return 0;
+    }
 
     System::Net::Http::HttpListener listener;
 
-    std::stringstream ss;
-    ss << "http://localhost:" << port << "/";
-    listener.Prefixes().push_back(ss.str());
+    listener.Prefixes()
+        .push_back(LocalHost(port));
 
     try
     {
@@ -52,16 +51,22 @@ int main(int argc, char *argv[])
         {
             auto context = listener.GetContext();
 
-            std::thread t([context, path]() {
+            std::thread([context]() {
                 if (context->Request()->RawUrl().size() == 0)
                 {
-                    defaultResponse(context->Response(), "Empty");
+                    DefaultResponse(context->Response(), "Empty");
+                    return;
                 }
 
-                auto requestedFile = System::IO::FileInfo(System::IO::Path::Combine(path, context->Request()->RawUrl().substr(1)));
+                auto requestedFile = System::IO::FileInfo(
+                            System::IO::Path::Combine(
+                                System::IO::Directory::GetCurrentWorkingDirectory(),
+                                context->Request()->RawUrl().substr(1))
+                            );
                 if (!requestedFile.Exists())
                 {
-                    defaultResponse(context->Response(), "File does not exist");
+                    DefaultResponse(context->Response(), "File does not exist");
+                    return;
                 }
 
                 // This will only correctly server text files
@@ -75,9 +80,8 @@ int main(int argc, char *argv[])
                 context->Response()->CloseOutput();
 
                 delete context;
-            });
-
-            t.detach();
+            })
+                .detach();
         }
 
         listener.Stop();
@@ -89,8 +93,17 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-void defaultResponse(System::Net::Http::HttpListenerResponse *response, std::string const &text)
+void DefaultResponse(System::Net::Http::HttpListenerResponse *response, std::string const &text)
 {
     response->WriteOutput("<html><body><h1>" + text + "</h1></body</html>");
     response->CloseOutput();
+}
+
+std::string LocalHost(unsigned int port)
+{
+    std::stringstream ss;
+
+    ss << "http://localhost:" << port << "/";
+
+    return ss.str();
 }

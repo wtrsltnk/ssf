@@ -4,8 +4,6 @@ project(ssf)
 
 list(APPEND CMAKE_PREFIX_PATH "$ENV{userprofile}/.cpppm/install")
 
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_PREFIX_PATH}/cmake)
-
 find_package(system.io REQUIRED)
 find_package(system.net REQUIRED)
 
