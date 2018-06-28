@@ -11,6 +11,7 @@
 
 void DefaultResponse(System::Net::Http::HttpListenerResponse *response, std::string const &text);
 std::string LocalHost(unsigned int port);
+std::string contentTypeFromExtension(std::string const &extension);
 
 int main(int argc, char *argv[])
 {
@@ -59,24 +60,22 @@ int main(int argc, char *argv[])
                 }
 
                 auto requestedFile = System::IO::FileInfo(
-                            System::IO::Path::Combine(
-                                System::IO::Directory::GetCurrentWorkingDirectory(),
-                                context->Request()->RawUrl().substr(1))
-                            );
+                    System::IO::Path::Combine(
+                        System::IO::Directory::GetCurrentWorkingDirectory(),
+                        context->Request()->RawUrl().substr(1)));
                 if (!requestedFile.Exists())
                 {
                     DefaultResponse(context->Response(), "File does not exist");
                     return;
                 }
 
-                // This will only correctly server text files
-                std::ifstream t(requestedFile.FullName());
-                std::string str((std::istreambuf_iterator<char>(t)),
-                                std::istreambuf_iterator<char>());
+                std::ifstream t(requestedFile.FullName(), std::ios::binary);
+                std::vector<char> buffer((std::istreambuf_iterator<char>(t)),
+                                         std::istreambuf_iterator<char>());
 
-                // todo : determine content type and set the corresponding header
+                context->Response()->AddHeader("Content-Type", contentTypeFromExtension(requestedFile.Extension()));
 
-                context->Response()->WriteOutput(str);
+                context->Response()->WriteOutput(buffer);
                 context->Response()->CloseOutput();
 
                 delete context;
@@ -106,4 +105,21 @@ std::string LocalHost(unsigned int port)
     ss << "http://localhost:" << port << "/";
 
     return ss.str();
+}
+
+std::string contentTypeFromExtension(std::string const &extension)
+{
+    if (extension == ".exe") return "application/octet-stream";
+    if (extension == ".html") return "text/html";
+    if (extension == ".htm") return "text/html";
+    if (extension == ".css") return "text/css";
+    if (extension == ".js") return "text/javascript";
+    if (extension == ".jpg") return "image/jpe";
+    if (extension == ".jpeg") return "image/jpeg";
+    if (extension == ".gif") return "image/gif";
+    if (extension == ".png") return "image/png";
+    if (extension == ".svg") return "image/svg+xml";
+    if (extension == ".ico") return "image/x-icon";
+
+    return "text/plain";
 }
