@@ -16,6 +16,6 @@ where options are:
 
 ## TODO
 
-- Make sure the correct ``Content-Type`` header is rerturned
-- Make sure binary files are supported
+- ~~Make sure the correct ``Content-Type`` header is rerturned~~
+- ~~Make sure binary files are supported~~
 - Add directory browsing
