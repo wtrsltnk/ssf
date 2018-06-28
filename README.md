@@ -18,4 +18,4 @@ where options are:
 
 - ~~Make sure the correct ``Content-Type`` header is rerturned~~
 - ~~Make sure binary files are supported~~
-- Add directory browsing
+- ~~Add directory browsing~~

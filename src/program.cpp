@@ -4,6 +4,7 @@
 #include <system.io/system.io.Path.h>
 #include <system.io/system.io.directory.h>
 #include <system.io/system.io.fileinfo.h>
+#include <system.io/system.io.file.h>
 #include <system.net/system.net.http.httplistener.h>
 #include <system.net/system.net.http.httplistenerexception.h>
 #include <system.net/system.net.http.httplistenerresponse.h>
@@ -52,33 +53,103 @@ int main(int argc, char *argv[])
         {
             auto context = listener.GetContext();
 
-            std::thread([context]() {
-                if (context->Request()->RawUrl().size() == 0)
+            std::thread([context, port]() {
+                std::unique_ptr<System::Net::Http::HttpListenerContext> deleteMe(context);
+
+                auto rawUrl = context->Request()->RawUrl();
+                if (rawUrl.size() == 0)
                 {
-                    DefaultResponse(context->Response(), "Empty");
-                    return;
+                    rawUrl = "/";
                 }
 
                 auto requestedFile = System::IO::FileInfo(
                     System::IO::Path::Combine(
                         System::IO::Directory::GetCurrentWorkingDirectory(),
-                        context->Request()->RawUrl().substr(1)));
-                if (!requestedFile.Exists())
+                        rawUrl.substr(1)));
+
+                if (requestedFile.Exists())
                 {
-                    DefaultResponse(context->Response(), "File does not exist");
+                    std::ifstream t(requestedFile.FullName(), std::ios::binary);
+                    std::vector<char> buffer((std::istreambuf_iterator<char>(t)),
+                                             std::istreambuf_iterator<char>());
+
+                    context->Response()->AddHeader("Content-Type", contentTypeFromExtension(requestedFile.Extension()));
+
+                    context->Response()->WriteOutput(buffer);
+                    context->Response()->CloseOutput();
+
                     return;
                 }
 
-                std::ifstream t(requestedFile.FullName(), std::ios::binary);
-                std::vector<char> buffer((std::istreambuf_iterator<char>(t)),
-                                         std::istreambuf_iterator<char>());
+                auto cwd = System::IO::Directory::GetCurrentWorkingDirectory();
+                auto requestedDirectory = System::IO::DirectoryInfo(System::IO::Path::Combine(cwd, rawUrl.substr(1)));
 
-                context->Response()->AddHeader("Content-Type", contentTypeFromExtension(requestedFile.Extension()));
+                if (requestedDirectory.Exists())
+                {
+                    std::cout << "Servind index of " << requestedDirectory.FullName() << std::endl;
+                    std::stringstream ss;
 
-                context->Response()->WriteOutput(buffer);
-                context->Response()->CloseOutput();
+                    ss << "<!doctype html>"
+                       << "<html lang=en>"
+                       << "  <head>"
+                       << "    <meta charset=utf-8>"
+                       << "    <title>" << rawUrl << "</title>"
+                       << "  </head>"
+                       << "  <body>"
+                       << "    <h1>Index of " << rawUrl << "</h1>";
 
-                delete context;
+                    ss << "    <hr/>";
+                    ss << "    <table>";
+                    ss << "      <tr>";
+                    ss << "      </tr>";
+                    if (rawUrl != "/" && rawUrl != "")
+                    {
+                        auto url = requestedDirectory.Parent().FullName().substr(cwd.size());
+                        if (url == "") url = "/";
+                        ss << "      <tr>";
+                        ss << "        <td>";
+                        ss << "          <span>&#8617;</span>";
+                        ss << "          <a href=\"" << url << "\">Parent Directory</a>";
+                        ss << "        <td>";
+                        ss << "      </tr>";
+                    }
+                    for (auto directory : requestedDirectory.GetDirectories())
+                    {
+                        auto url = directory.substr(cwd.size());
+                        ss << "      <tr>";
+                        ss << "        <td>";
+                        ss << "          <span>&#9724;</span>";
+                        ss << "          <a href=\"" << url << "\">" << directory.substr(requestedDirectory.FullName().size() + 1) << "</a>";
+                        ss << "        <td>";
+                        ss << "      </tr>";
+                    }
+                    for (auto file : requestedDirectory.GetFiles())
+                    {
+                        auto url = file.substr(cwd.size());
+                        ss << "      <tr>";
+                        ss << "        <td>";
+                        ss << "          <span>&#9671;</span>";
+                        ss << "          <a href=\"" << url << "\">" << file.substr(requestedDirectory.FullName().size() + 1) << "</a>";
+                        ss << "        <td>";
+                        ss << "      </tr>";
+                    }
+                    ss << "    </table>";
+
+                    ss << "    <hr/>";
+                    ss << "    <p>Serve Static Files from port " << port << "</p>";
+
+                    ss << "  </body>"
+                       << "</html>";
+
+                    context->Response()->AddHeader("Content-Type", "text/html");
+
+                    context->Response()->WriteOutput(ss.str());
+                    context->Response()->CloseOutput();
+
+                    return;
+                }
+
+                DefaultResponse(context->Response(), "File or directory does not exist");
             })
                 .detach();
         }
