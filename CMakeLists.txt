@@ -1,11 +1,9 @@
 cmake_minimum_required(VERSION 3.7)
 
+include(cmake/get_cpm.cmake)
+include(cmake/Dependencies.cmake)
+
 project(ssf)
-
-list(APPEND CMAKE_PREFIX_PATH "$ENV{userprofile}/.cpppm/install")
-
-find_package(system.io REQUIRED)
-find_package(system.net REQUIRED)
 
 add_executable(ssf
     src/program.cpp
